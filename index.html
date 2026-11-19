@@ -680,7 +680,7 @@ const fmtVoto=v=>v==null?"–":v.toFixed(2).replace(".",",").replace(/0$/,"");
 
 /* ---------- accesso con ID e password ---------- */
 const QUOTA_MESE=25,QUOTA_GK=5;
-const APP_URL=location.origin+"/";
+const APP_URL=location.origin+location.pathname.replace(/[^/]*$/,"");
 const te=new TextEncoder();
 const hex=b=>[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
 const b64=b=>{let s="";for(let i=0;i<b.length;i+=8192)s+=String.fromCharCode(...b.subarray(i,i+8192));return btoa(s)};
