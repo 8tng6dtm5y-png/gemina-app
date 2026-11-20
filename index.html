@@ -8,6 +8,7 @@
 <title>GEMINA FC | Calcio a 8 · Amacup</title>
 <link rel="icon" href="media/stemma.webp">
 <link rel="stylesheet" href="style.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.89.0/dist/umd/supabase.js"></script>
 <script defer src="site.js"></script>
 </head>
 <body>
@@ -23,7 +24,7 @@
 <p class="intro">Una squadra amatoriale di calcio a 8, nata al campetto e oggi in campo nell’Amacup.</p>
 <div class="actions"><a class="button lime" href="#partite">Vai alle partite</a><a class="button glass" href="#storia">Scopri il club</a></div>
 </div></section>
-<section id="partite" class="wrapper match"><div><p class="eyebrow">AMACUP · CALCIO A 8</p><h2>Prossima partita</h2><p id="next">Data e avversario da confermare.</p></div><button class="button outline" type="button" id="calendar-toggle" aria-expanded="false" aria-controls="calendar">Calendario e risultati</button>
+<section id="partite" class="wrapper match"><div><p class="eyebrow">AMACUP · CALCIO A 8</p><h2>Prossima partita</h2><p id="next">Data e avversario da confermare.</p></div><button class="button outline" type="button" id="calendar-toggle" aria-expanded="false" aria-controls="calendar">Vedi formazione</button>
 <div id="calendar" hidden><p id="calendar-state"></p><ul id="fixtures"></ul></div></section>
 <section id="storia" class="side-panel">
 <div class="photo-edge left" aria-hidden="true"><img src="media/portiere-retro.webp" alt="" loading="lazy" decoding="async"><img src="media/kappa.webp" alt="" loading="lazy" decoding="async"></div><div class="photo-edge right" aria-hidden="true"><img src="media/tom.webp" alt="" loading="lazy" decoding="async"><img src="media/gano.webp" alt="" loading="lazy" decoding="async"></div>
@@ -39,7 +40,7 @@
 </section>
 <section id="tifosi" class="fan side-panel">
 <div class="photo-edge left" aria-hidden="true"><img src="media/capitano.webp" alt="" loading="lazy" decoding="async"><img src="media/edwin-rete.webp" alt="" loading="lazy" decoding="async"><img src="media/numero-20.webp" alt="" loading="lazy" decoding="async"></div><div class="photo-edge right" aria-hidden="true"><img src="media/portiere.webp" alt="" loading="lazy" decoding="async"><img src="media/edwin-campo.webp" alt="" loading="lazy" decoding="async"><img src="media/panchina.webp" alt="" loading="lazy" decoding="async"></div>
-<div class="wrapper section-copy"><p class="eyebrow">AREA TIFOSI</p><h2>Il migliore<br>in campo</h2><p id="poll-state">Al momento non ci sono votazioni aperte.</p><details><summary>Confronti tra giocatori</summary><p>Qui troverai le schede pubbliche e i confronti tra giocatori.</p></details></div>
+<div class="wrapper section-copy"><p class="eyebrow">AREA TIFOSI</p><h2>Il migliore<br>in campo</h2><div id="polls"></div><p id="poll-state" role="status"></p></div>
 </section>
 <section class="wrapper sponsors"><div><p class="eyebrow">PARTNER</p><h2>I nostri sponsor</h2></div><div class="sponsor light"><img src="media/chicchissimo.webp" alt="Chicchissimo" loading="lazy"></div><a class="sponsor" href="https://direttodacri.com"><img src="media/diretto.webp" alt="DirettodaCri.com" loading="lazy"></a></section>
 <section id="contatti" class="contact"><div class="wrapper contact-grid"><img src="media/squadra-spogliatoio.webp" alt="La GEMINA FC riunita nello spogliatoio" width="1536" height="1152" loading="lazy"><div><h2>Unisciti a noi</h2><p>Vuoi giocare con la Gemina o proporci una collaborazione?</p><div class="actions"><a class="button lime" href="https://www.instagram.com/gemina_fc/">Gioca con noi</a><a class="button outline" href="https://ig.me/m/gemina_fc">Collabora con noi</a></div><p>Scrivici su Instagram a <strong>@gemina_fc</strong>.</p></div></div></section>

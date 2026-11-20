@@ -766,6 +766,7 @@ function subscribeCampo(db){
   if(S.canEdit){S.mode="admin";S.admin=true;S.tab=lsGet("gemina-tab")||"rosa"}
   else if(!(await openFromLink()))await restoreSession();
   S.ready=true;render();if(S.canEdit)SB.offerImport();
+  refreshFanAwards().then(()=>{if(fanAwards.length)render()}).catch(console.error);
 })();
 async function restoreSession(){
   const s=getSess(); if(!s)return;
@@ -775,6 +776,18 @@ async function restoreSession(){
 }
 /* il giocatore legge i dati cifrati dentro la pagina: non serve nessun account */
 function snapPart(c){const s=S.snap;if(!s)return null;if(s.campi)return s.campi[c]||null;return c==="c8"&&s.acc?s:null}
+document.addEventListener("click",e=>{
+  const id=e.target.closest("[data-resume-player]")?.dataset.resumePlayer;
+  if(id&&S.canEdit&&playerById(id)?.accessoSospeso)
+    safe(S.db.doc(col("giocatori")+"/"+id).update({accessoSospeso:false}),"Accesso riattivato. Pubblica per i giocatori.");
+});
+document.addEventListener("visibilitychange",async ()=>{
+  if(document.hidden||S.mode!=="player")return;
+  const session=getSess(),snapshot=await SB.loadSnap();
+  if(!snapshot||!session||getSess()?.lookup!==session.lookup||S.mode!=="player")return;
+  const campi=snapshot.campi||(snapshot.acc?{c8:snapshot}:{});
+  if(!campi[S.campo]?.acc?.[session.lookup])location.reload();
+});
 async function openPlayer(lookup,keyRaw){
   const sn=S.snap;if(!sn)return false;
   const campi=sn.campi?sn.campi:(sn.acc?{c8:sn}:{});
@@ -850,11 +863,60 @@ const SKEL_HEAD='<!doctype html><html><head><meta charset=utf8><meta name=viewpo
 function stable(v){if(Array.isArray(v))return "["+v.map(stable).join(",")+"]";if(v&&typeof v==="object")return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+stable(v[k])).join(",")+"}";return JSON.stringify(v===undefined?null:v)}
 function teamData(){return {players:[...S.players,...S.staff].map(({id,nome,ruolo,numero,stato,quotaPartita,gemina,foto,utBase,alias,utNome})=>({id,nome,ruolo,numero,stato,quotaPartita:!!quotaPartita,gemina:!!gemina,...(foto?{foto}:{}),...(utBase?{utBase}:{}),...(alias?{alias}:{}),...(utNome?{utNome}:{})})),avvisi:(S.avvisi||[]).map(({id,testo,creato})=>({id,testo:testo||"",creato:creato||""})),events:(S.events||[]).filter(e=>!e.per).map(({id,titolo,data,ora,luogo,tipo,note,promemoria,costo,scadenza})=>({id,titolo:titolo||"",data:data||"",ora:ora||"",luogo:luogo||"",tipo:tipo||"invito",note:note||"",promemoria:promemoria||7,costo:costo||"",scadenza:scadenza||""})),classifica:(S.classifica||[]).map(({id,squadra,v,n,p,gf,gs,noi,ord})=>({id,squadra:squadra||"",v:num(v),n:num(n),p:num(p),gf:num(gf),gs:num(gs),noi:!!noi,ord:ord==null?999:num(ord)})),storico:storicoFrom(S.archivio),lib:Object.values(S.lib||{}).map(({id,nome,fase,note,modulo,steps,sugg})=>({id,nome:nome||"",fase:fase||"",note:note||"",modulo:modulo||"",sugg:!!sugg,steps:(steps||[]).map(s=>({pos:s.pos||{},txt:s.txt||""}))})),allen:(S.allen||[]).map(({id,data,ora,luogo,note,pres})=>({id,data:data||"",ora:ora||"",luogo:luogo||"",note:note||"",pres:Object.fromEntries(Object.entries(pres||{}).filter(([,v])=>v))})),campgioc:(S.campgioc||[]).map(({id,tipo,nome,squadra,n,rossi,nota,ord})=>({id,tipo:tipo||"gol",nome:nome||"",squadra:squadra||"",n:num(n),rossi:num(rossi),nota:nota||"",ord:ord==null?999:num(ord)})),matches:S.matches,utvoti:Object.fromEntries(Object.entries(S.utvoti||{}).map(([k,v])=>[k,{voti:(v&&v.voti)||{},rig:(v&&v.rig)||{},bon:(v&&v.bon)||{},spo:(v&&v.spo)||{}}])),materiale:Object.fromEntries(Object.entries(S.materiale||{}).map(([k,v])=>[k,{disp:(v&&v.disp)||""}])),utgraf:(S.utgraf||[]).map(({id,titolo,pid,mid,img,testo,data})=>({id,titolo:titolo||"",pid:pid||"",mid:mid||"",img:img||"",testo:testo||"",data:data||""}))}}
 async function currentDigest(){
-  const acc={};for(const[pid,c] of Object.entries(S.cred))if(playerById(pid))acc[c.lookup]=payloadFor(pid);
+  const acc={};for(const[pid,c] of Object.entries(S.cred))if(playerById(pid)&&!playerById(pid).accessoSospeso)acc[c.lookup]=payloadFor(pid);
   const s=stable({t:teamData(),acc});
   return hex(new Uint8Array(await crypto.subtle.digest("SHA-256",te.encode(s))));
 }
 let pubTok=0;
+let fanAwards=[];
+let fanPolls=[];
+let fanCandidates={};
+
+async function refreshFanAwards(){
+  if(!SB.client)return;
+  const [polls,results,feed]=await Promise.all([
+    SB.client.from("gemina_sondaggi").select("*"),
+    SB.client.from("gemina_risultati_tifosi").select("*").order("voti",{ascending:false}),
+    SB.client.from("gemina_partite_web").select("partite").eq("id","c8").maybeSingle()
+  ]);
+  if(polls.error||results.error||feed.error)return;
+  fanPolls=polls.data;
+  const matches=feed.data?.partite||[];
+  fanCandidates=Object.fromEntries(fanPolls.map(p=>{
+    const match=matches.find(m=>m.data===p.data&&m.avversario===p.avversario);
+    return [p.id,match?.candidati||[]];
+  }));
+  fanAwards=fanPolls.flatMap(p=>{
+    const scores=results.data.filter(r=>r.sondaggio===p.id);
+    const best=scores[0];
+    return best&&scores[1]?.voti!==best.voti?[{...best,titolo:p.titolo}]:[];
+  });
+}
+
+async function viewFanVotes(){
+  await refreshFanAwards();
+  const {data,error}=await SB.client.from("gemina_voti_tifosi").select("sondaggio,tifoso,candidato,votato_il").order("votato_il",{ascending:false});
+  if(error){toast("Registro dei voti non disponibile.");return}
+  const modal=document.createElement("dialog");
+  modal.style.cssText="width:min(92vw,760px);max-height:80vh;overflow:auto";
+  const playerName=(poll,id)=>fanCandidates[poll]?.find(p=>p.id===id)?.nome||playerById(id)?.nome||"Giocatore non disponibile";
+  modal.innerHTML=`<form method="dialog"><button class="btn sm">Chiudi</button></form><h2>Voti dei tifosi</h2>${
+    fanPolls.map(p=>{
+      const award=fanAwards.find(w=>w.sondaggio===p.id);
+      const votes=data.filter(v=>v.sondaggio===p.id);
+      const totals={};for(const v of votes)totals[v.candidato]=(totals[v.candidato]||0)+1;
+      return `<section><h3>${esc(p.titolo)}</h3>${award?`<p><b>MVP dei tifosi: ${esc(playerName(p.id,award.candidato))}</b></p>`:""}
+      <p>${Object.entries(totals).map(([id,n])=>`${esc(playerName(p.id,id))}: ${n}`).join(" · ")||"Nessun voto registrato."}</p>
+      ${votes.length?`<ul>${votes.map(v=>`<li>${esc(playerName(p.id,v.candidato))} · ${esc(new Date(v.votato_il).toLocaleString("it-IT",{timeZone:"Europe/Rome"}))} · account ${esc(v.tifoso.slice(0,8))}</li>`).join("")}</ul>`:""}</section>`;
+    }).join("")
+  }`;
+  document.body.append(modal);
+  modal.addEventListener("close",()=>modal.remove(),{once:true});
+  modal.showModal();
+}
+document.addEventListener("click",e=>{
+  if(S.canEdit&&e.target.closest("[data-open-fan-votes]"))viewFanVotes();
+});
 async function updatePub(){
   const el=$("#pub");if(!el)return;
   if(S.mode!=="admin"){el.hidden=true;return}
@@ -862,7 +924,7 @@ async function updatePub(){
   const tok=++pubTok,d=await currentDigest();if(tok!==pubTok)return;
   const cur=snapPart(S.campo),fresh=!!cur&&cur.dig===d;
   el.hidden=false;el.className="pubbar "+(fresh?"ok":"due");
-  el.innerHTML=`<div class="pub-in"><span>${fresh?`I giocatori vedono i dati aggiornati`:`I giocatori non vedono ancora le ultime modifiche`}${cur&&cur.at?` <span class="small">· ultima pubblicazione ${new Date(cur.at).toLocaleString("it-IT",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span>`:""}</span>${fresh?"":`<button class="btn sm go" data-publish>Pubblica per i giocatori</button>`}${S.campo==="c8"?`<button class="btn sm go" data-publish-web>Pubblica calendario sul sito</button>`:""}</div>`;
+  el.innerHTML=`<div class="pub-in"><span>${fresh?`I giocatori vedono i dati aggiornati`:`I giocatori non vedono ancora le ultime modifiche`}${cur&&cur.at?` <span class="small">· ultima pubblicazione ${new Date(cur.at).toLocaleString("it-IT",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span>`:""}</span>${fresh?"":`<button class="btn sm go" data-publish>Pubblica per i giocatori</button>`}${S.campo==="c8"?`<button class="btn sm go" data-publish-web>Pubblica calendario sul sito</button> <button class="btn sm" data-open-fan-votes>Voti dei tifosi${fanAwards.length?` · ${fanAwards.length} premi`:""}</button>`:""}</div>`;
 }
 async function publishPublicCalendar(btn){
   if(!S.canEdit||S.campo!=="c8"||!S.loaded.p||!S.loaded.m)return;
@@ -871,13 +933,18 @@ async function publishPublicCalendar(btn){
   try{
     const partite=S.matches.filter(m=>m.avversario&&m.data).map(m=>{
       const posti=resolvePosti(m);
-      const formazione=slotsOf(m.modulo).map(slot=>playerById(posti[slot.k]))
-        .filter(Boolean).map(p=>initName(p.nome));
+      const campo=slotsOf(m.modulo).flatMap(slot=>{
+        const p=playerById(posti[slot.k]);
+        return p?[{numero:p.numero??null,cognome:initName(p.nome).replace(/^.\. /,""),x:slot.x,y:slot.y}]:[];
+      });
+      const formazione=campo.map(p=>p.cognome);
+      const candidati=S.players.filter(p=>isPlayed(m)?utPlayed(m,p.id):!p.accessoSospeso&&["titolare","panchina"].includes(lineupOf(m,p.id)))
+        .map(p=>({id:p.id,nome:p.nome,numero:p.numero??null}));
       const mvp=playerById(utMotm(m));
       const giocata=isPlayed(m);
       return {
         data:m.data, orario:m.orario||"", avversario:m.avversario, luogo:m.luogo||"",
-        trasferta:m.casa==="trasferta", modulo:m.modulo||"", formazione,
+        trasferta:m.casa==="trasferta", modulo:m.modulo||"", formazione, campo, candidati,
         risultato:giocata&&m.gs!==""&&m.gs!=null?[m.gf,m.gs]:null,
         migliore:giocata&&mvp?initName(mvp.nome):""
       };
@@ -907,7 +974,7 @@ async function publishForPlayers(btn){
     if(!tkey){tkey=b64(crypto.getRandomValues(new Uint8Array(32)));await S.db.doc("config/admin").update({tkey});S.cfg={...S.cfg,tkey}}
     const T=unb64(tkey),dig=await currentDigest(),acc={};
     for(const[pid,c] of Object.entries(S.cred)){
-      if(!playerById(pid)||!c.login||!c.password)continue;
+      if(!playerById(pid)||playerById(pid).accessoSospeso||!c.login||!c.password)continue;
       const {lookup,keyRaw}=await deriveCreds(c.login,c.password);
       acc[lookup]=await seal(keyRaw,{pid,t:tkey,pay:payloadFor(pid)});
     }
@@ -1844,7 +1911,10 @@ function viewScheda(){
   if(S.confirm==="del:"+p.id)h+=`<div class="confirm">Rimuovere ${esc(p.nome)}? Le sue statistiche nelle giornate restano salvate. <button class="btn sm danger" data-delyes="${p.id}">Sì, rimuovi</button><button class="btn sm" data-cancel>Annulla</button></div>`;
   if(S.admin&&S.editPlayer===p.id)h+=editPlayerForm(p);
   h+=`<section class="hero"><div class="big num">${esc(p.numero||"–")}</div><div><h2>${esc(p.nome)}</h2><div class="meta"><span>${esc(p.ruolo)}</span>${statePill(p)}${isC5()&&p.gemina?'<span class="pill p-purple">Gioca anche nella Gemina</span>':""}${potmBadges(p.id)}</div></div></section>`;
+  const supporterAwards=S.campo==="c8"?fanAwards.filter(w=>w.candidato===p.id):[];
+  for(const w of supporterAwards)h+=`<div class="panel"><strong>MVP dei tifosi</strong><p>Complimenti! Sei stato votato come miglior giocatore di ${esc(w.titolo)}.</p></div>`;
   h+=`<div class="tiles">
+    ${S.campo==="c8"?tile("Premi dei tifosi",supporterAwards.length,supporterAwards.length>0):""}
     ${tile("Presenze",t.pres)}${tile("Minuti",t.min+"'")}${tile("Gol",t.gol,true)}${tile("Assist",t.ass,true)}
     ${tile("Media voto",fmtVoto(t.media))}${tile("Media squadra",fmtVoto(teamAvg()))}${tile("Premi MVP",t.mvp,t.mvp>0)}
     ${tile("Ammonizioni",`<span class="card-y"></span>${t.gialli}`)}${tile("Espulsioni",`<span class="card-r"></span>${t.rossi}`)}
@@ -2532,8 +2602,8 @@ function viewAccessi(){
     h+=`<tr><td><span class="shirt">${esc(p.numero||"–")}</span> <b>${esc(p.nome)}</b></td>
     <td><input type="text" id="cl-${p.id}" data-cred="${p.id}" data-f="login" value="${esc(credVal(p.id,"login"))}" placeholder="es. rossi10" autocapitalize="none" spellcheck="false" aria-label="ID accesso ${esc(p.nome)}"></td>
     <td><input type="text" id="cp-${p.id}" data-cred="${p.id}" data-f="password" value="${esc(credVal(p.id,"password"))}" placeholder="almeno 6 caratteri" autocapitalize="none" spellcheck="false" aria-label="Password ${esc(p.nome)}"></td>
-    <td>${c?`<span class="pill s-ok">Attivo</span>`:`<span class="pill s-mute">Senza accesso</span>`}</td>
-    <td><div class="row nowrap"><button class="btn sm" data-gencred="${p.id}">Genera</button><button class="btn sm primary" data-savecred="${p.id}">Salva</button>${c?`<button class="btn sm" data-copycred="${p.id}">Copia</button>`:""}</div></td></tr>`}
+    <td>${p.accessoSospeso?`<span class="pill s-mute">Sospeso</span>`:c?`<span class="pill s-ok">Attivo</span>`:`<span class="pill s-mute">Senza accesso</span>`}</td>
+    <td><div class="row nowrap"><button class="btn sm" data-gencred="${p.id}">Genera</button><button class="btn sm primary" data-savecred="${p.id}">Salva</button>${c&&!p.accessoSospeso?`<button class="btn sm" data-copycred="${p.id}">Copia</button>`:""} ${p.accessoSospeso?`<button class="btn sm" data-resume-player="${p.id}">Riattiva</button>`:""}</div></td></tr>`}
   h+=`</tbody></table></div>
   <div class="help"><b>Come funziona</b><span>“Genera” propone un ID e una password. Premi “Salva”, poi “Pubblica per i giocatori” nella barra in alto: da quel momento l'accesso funziona. “Copia” prepara il messaggio per WhatsApp con il link personale del giocatore: aprendolo entra subito, senza scrivere ID e password.</span></div>
   <form class="panel" id="adminCredForm" autocomplete="off"><h3>Il tuo accesso admin</h3>

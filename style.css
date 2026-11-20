@@ -56,3 +56,16 @@
  .captain-grid{padding-block:36px}
  .captain-grid>img{width:min(100%,310px)}
 }
+#fixtures {list-style:none;padding:0;margin:0}
+.pitch {position:relative;list-style:none;margin:0 auto;padding:0;width:min(100%,530px);aspect-ratio:1.15;background:repeating-linear-gradient(0deg,#173b30 0 12.5%,#1b4837 12.5% 25%);border:2px solid #a4d1ba;border-radius:10px}
+.pitch::before,.pitch::after {content:"";position:absolute;pointer-events:none}
+.pitch::before {top:50%;width:100%;border-top:1px solid #a4d1ba}
+.pitch::after {top:50%;left:50%;width:18%;aspect-ratio:1;transform:translate(-50%,-50%);border:1px solid #a4d1ba;border-radius:100%}
+.pitch-player {position:absolute;z-index:1;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:3px;width:18%;text-align:center;line-height:1}
+.pitch-player b {display:grid;place-items:center;width:2rem;aspect-ratio:1;background:var(--lime,#caff23);color:#150f23;border-radius:50%;font-size:.85rem}
+.pitch-player span {font-size:clamp(.62rem,2vw,.82rem);overflow-wrap:anywhere;text-shadow:0 1px 3px #000,0 1px 3px #000}
+.poll-card {padding:1rem;margin-block:1rem;border:1px solid #514460;border-radius:12px;background:#1b1228}
+.poll-card h3,.poll-card p {margin:0 0 .6rem}
+.poll-form {display:grid;gap:.65rem}
+.poll-form input,.poll-form select {display:block;width:100%;min-height:42px;padding:.45rem;border:1px solid #695981;border-radius:6px;background:#261937;color:#fff}
+.poll-form button {justify-self:start}
