@@ -862,8 +862,40 @@ async function updatePub(){
   const tok=++pubTok,d=await currentDigest();if(tok!==pubTok)return;
   const cur=snapPart(S.campo),fresh=!!cur&&cur.dig===d;
   el.hidden=false;el.className="pubbar "+(fresh?"ok":"due");
-  el.innerHTML=`<div class="pub-in"><span>${fresh?`I giocatori vedono i dati aggiornati`:`I giocatori non vedono ancora le ultime modifiche`}${cur&&cur.at?` <span class="small">· ultima pubblicazione ${new Date(cur.at).toLocaleString("it-IT",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span>`:""}</span>${fresh?"":`<button class="btn sm go" data-publish>Pubblica per i giocatori</button>`}</div>`;
+  el.innerHTML=`<div class="pub-in"><span>${fresh?`I giocatori vedono i dati aggiornati`:`I giocatori non vedono ancora le ultime modifiche`}${cur&&cur.at?` <span class="small">· ultima pubblicazione ${new Date(cur.at).toLocaleString("it-IT",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</span>`:""}</span>${fresh?"":`<button class="btn sm go" data-publish>Pubblica per i giocatori</button>`}${S.campo==="c8"?`<button class="btn sm go" data-publish-web>Pubblica calendario sul sito</button>`:""}</div>`;
 }
+async function publishPublicCalendar(btn){
+  if(!S.canEdit||S.campo!=="c8"||!S.loaded.p||!S.loaded.m)return;
+  if(!confirm("Pubblicare sul sito partite, formazioni e migliori in campo del calcio a 8?"))return;
+  btn.disabled=true;
+  try{
+    const partite=S.matches.filter(m=>m.avversario&&m.data).map(m=>{
+      const posti=resolvePosti(m);
+      const formazione=slotsOf(m.modulo).map(slot=>playerById(posti[slot.k]))
+        .filter(Boolean).map(p=>initName(p.nome));
+      const mvp=playerById(utMotm(m));
+      const giocata=isPlayed(m);
+      return {
+        data:m.data, orario:m.orario||"", avversario:m.avversario, luogo:m.luogo||"",
+        trasferta:m.casa==="trasferta", modulo:m.modulo||"", formazione,
+        risultato:giocata&&m.gs!==""&&m.gs!=null?[m.gf,m.gs]:null,
+        migliore:giocata&&mvp?initName(mvp.nome):""
+      };
+    });
+    const {error}=await SB.client.from("gemina_partite_web").upsert({id:"c8",partite});
+    if(error)throw error;
+    toast("Calendario pubblico aggiornato");
+  }catch(e){
+    console.error(e);
+    toast("Pubblicazione sul sito non riuscita.");
+  }finally{
+    btn.disabled=false;
+  }
+}
+document.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-publish-web]");
+  if(btn)publishPublicCalendar(btn);
+});
 async function publishForPlayers(btn){
   if(btn){btn.disabled=true;btn.textContent="Pubblicazione…"}
   const reset=()=>{if(btn){btn.disabled=false;btn.textContent="Pubblica per i giocatori"}};
@@ -886,29 +918,7 @@ async function publishForPlayers(btn){
     const snap={v:2,at:part.at,campi,adm:S.cfg&&S.cfg.lookup?S.cfg.lookup.slice(0,12):(old.adm||"")}; /* adm: inizio dell'impronta admin, solo per spiegare perché dal telefono non entra */
     await SB.saveSnap(snap);S.snap=snap;reset();render();
     toast("Pubblicato: i giocatori vedono i dati aggiornati");
-    if(S.campo==="c8" && confirm("Aggiornare anche il sito pubblico con partite, formazioni e migliori in campo?")){
-      try{
-        const partite=S.matches.filter(m=>m.avversario&&m.data).map(m=>{
-          const posti=resolvePosti(m);
-          const formazione=slotsOf(m.modulo).map(slot=>playerById(posti[slot.k]))
-            .filter(Boolean).map(p=>initName(p.nome));
-          const mvp=playerById(utMotm(m));
-          const giocata=isPlayed(m);
-          return {
-            data:m.data, orario:m.orario||"", avversario:m.avversario, luogo:m.luogo||"",
-            trasferta:m.casa==="trasferta", modulo:m.modulo||"", formazione,
-            risultato:giocata&&m.gs!==""&&m.gs!=null?[m.gf,m.gs]:null,
-            migliore:giocata&&mvp?initName(mvp.nome):""
-          };
-        });
-        const {error}=await SB.client.from("gemina_partite_web").upsert({id:"c8",partite});
-        if(error)throw error;
-        toast("Calendario pubblico aggiornato");
-      }catch(e){
-        console.error(e);
-        toast("Spogliatoio aggiornato. Pubblicazione sul sito non riuscita.");
-      }
-    }
+
   }catch(e){
     console.error(e);reset();
     const c=e&&e.code;
