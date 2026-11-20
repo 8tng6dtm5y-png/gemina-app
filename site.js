@@ -83,6 +83,13 @@ function showLineup(match) {
   return row;
 }
 
+const authFragment = new URLSearchParams(location.hash.slice(1));
+const authQuery = new URLSearchParams(location.search);
+const authReturn = authQuery.has('voto') || authQuery.has('code') ||
+  authFragment.has('access_token') || authFragment.has('error') || authQuery.has('error');
+const authFailed = authFragment.has('error') || authQuery.has('error') ||
+  authFragment.has('error_code') || authQuery.has('error_code');
+
 const fanClient = window.supabase?.createClient(feed, publicKey, {
   auth: { storageKey: 'gemina-tifosi', persistSession: true },
 });
@@ -161,7 +168,6 @@ function buildVoteForm(poll, candidates) {
     try {
       if (!session) {
         const redirect = new URL('/', location.origin);
-        redirect.searchParams.set('voto', '1');
         const { error } = await fanClient.auth.signInWithOtp({
           email: field.value.trim(), options: { emailRedirectTo: redirect.href },
         });
@@ -218,14 +224,17 @@ async function loadPolls() {
       }
     }
     renderPolls();
-    pollStatus.textContent = '';
+    pollStatus.textContent = authReturn
+      ? session && !authFailed ? 'Accesso riuscito. Ora puoi scegliere un giocatore e votare.'
+        : 'Il link non ha completato l’accesso. Richiedine uno nuovo e aprilo nel browser.'
+      : '';
   } catch {
     pollStatus.textContent = 'Votazioni momentaneamente non disponibili.';
   }
 }
 
 loadMatches().then(loadPolls).then(() => {
-  if (new URLSearchParams(location.search).has('voto')) pollList.scrollIntoView();
+  if (authReturn) document.querySelector('#tifosi').scrollIntoView();
 });
 setInterval(() => {
   if (!document.hidden && !pollList.contains(document.activeElement)) loadPolls();
